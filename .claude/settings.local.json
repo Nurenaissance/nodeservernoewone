@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir /s /b *.py)",
+      "Bash(findstr:*)",
+      "Bash(gemini -p \"@mainwebhook/snm.js @mainwebhook/userWebhook.js @helpers/misc.js\n\nAnalyze the WhatsApp bot flow system and answer these questions:\n\n1. **Flow Structure**: How is the flow data structured? What is flowData and adjList?\n\n2. **Flow Conversion**: Is there a convert-flow function that transforms frontend flow data to the backend format \\(flowData + adjList\\)? If not, where does this conversion happen?\n\n3. **Flow Iteration Method**: How does the system iterate through nodes? Analyze the logic of:\n   - How currNode and nextNode work\n   - How the adjList is used to navigate\n   - How button/list selections advance the flow\n   - The double-advance bug mentioned\n\n4. **Is this method good?**: Evaluate the graph-based approach with adjList:\n   - Pros and cons of using an adjacency list\n   - Performance implications\n   - Scalability issues\n   - Alternative approaches that might be better\n\n5. **Design Issues**: Identify any structural or algorithmic problems in how flows are:\n   - Stored \\(flowData array + adjList\\)\n   - Traversed \\(currNode -> nextNode via adjList\\)\n   - Managed \\(button selection, node transitions\\)\n\nProvide a comprehensive technical analysis.\")",
+      "Bash(python manage.py makemigrations:*)",
+      "Bash(python manage.py migrate:*)",
+      "Bash(node --check:*)",
+      "Bash(node:*)",
+      "Bash(timeout /t 5 /nobreak)",
+      "Bash(ping:*)",
+      "Bash(netstat:*)",
+      "Bash(tasklist:*)",
+      "Bash(cmd //c \"tasklist /FI \"\"IMAGENAME eq node.exe\"\"\")",
+      "Bash(powershell:*)",
+      "Bash(curl:*)",
+      "Bash(gemini -p \"@./ Analyze this WhatsApp bot server codebase and create a comprehensive DEPLOYMENT.md guide. Include:\n\n1. **Prerequisites** - All required software, services, and accounts needed\n2. **Environment Variables** - Complete list of all env vars used across all files with descriptions\n3. **Service Dependencies** - Django, FastAPI, Redis, and any other external services\n4. **Local Development Setup** - Step-by-step instructions for running locally\n5. **Production Deployment** - Instructions for deploying to production \\(Azure\\)\n6. **Configuration Options** - All configurable settings and their defaults\n7. **Common Issues & Troubleshooting** - Known issues and their solutions\n8. **Health Checks** - How to verify all services are working\n\nFormat as a professional markdown document ready for use.\")",
+      "Bash(gemini -p \"@package.json @.env.example @server.js @sessionManager.js @mainwebhook/snm.js @mainwebhook/userWebhook.js @helpers/misc.js @queues/workerQueues.js @middleware/rateLimiter.js @analytics/cache.js @routes/ @pm2.config.json\n\nAnalyze this WhatsApp bot server codebase and output a comprehensive DEPLOYMENT.md guide content. Include:\n\n1. **Prerequisites** - All required software, services, and accounts needed\n2. **Environment Variables** - Complete list of all env vars used across all files with descriptions  \n3. **Service Dependencies** - Django, FastAPI, Redis, and any other external services with their endpoints\n4. **Local Development Setup** - Step-by-step instructions for running locally\n5. **Production Deployment** - Instructions for deploying to production \\(Azure\\)\n6. **Configuration Options** - All configurable settings and their defaults\n7. **Common Issues & Troubleshooting** - Known issues like Redis auth errors, session failures, backend connection issues\n8. **Health Checks** - How to verify all services are working\n\nOutput the complete markdown content directly - do not try to write to a file.\")"
+    ]
+  }
+}

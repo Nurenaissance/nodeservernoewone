@@ -1,0 +1,26 @@
+{
+  "apps": [
+    {
+      "name": "myserver",
+      "script": "./server.js",
+      "instances": 1,
+      "autorestart": true,
+      "watch": false,
+      "log_file": "/home/LogFiles/myserver.log",
+      "out_file": "/home/LogFiles/myserver-out.log",
+      "error_file": "/home/LogFiles/myserver-error.log",
+      "merge_logs": true
+    },
+    {
+      "name": "myworker",
+      "script": "./queues/worker.js",
+      "instances": 1,
+      "autorestart": true,
+      "watch": false,
+      "log_file": "/home/LogFiles/myworker.log",
+      "out_file": "/home/LogFiles/myworker-out.log",
+      "error_file": "/home/LogFiles/myworker-error.log",
+      "merge_logs": true
+    }
+  ]
+}
