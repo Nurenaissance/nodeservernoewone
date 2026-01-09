@@ -8,6 +8,7 @@ import flowRoutes from './flowRoute.js';
 import triggerRoutes from './triggerRoute.js';
 import sessionRoutes from './sessionRoute.js';
 import analyticsRoutes from './analyticsRoute.js';
+import aiAgentRoutes from './aiAgentRoute.js';
 
 export default function setupRoutes(app) {
   app.use(healthRoutes);
@@ -20,6 +21,7 @@ export default function setupRoutes(app) {
   app.use(triggerRoutes);
   app.use(sessionRoutes);
   app.use('/api/analytics', analyticsRoutes);
+  app.use('/api', aiAgentRoutes);
   
   // Default route
   app.get("/", (req, res) => {

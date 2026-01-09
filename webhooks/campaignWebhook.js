@@ -61,7 +61,7 @@ async function sendDelayedTemplate(index, campaign, key) {
 
 async function getSession(key) {
     const [bpid, phone] = key.split("_");
-    let userSession = userSessions.get(key);
+    let userSession = await userSessions.get(key);
     if (!userSession) {
         userSession = {
             bpid: bpid,
@@ -69,7 +69,7 @@ async function getSession(key) {
             templateInfo: null,
             lastMessageID: null
         }
-        userSessions.set(key, userSession)
+        await userSessions.set(key, userSession)
     }
     return userSession
 }

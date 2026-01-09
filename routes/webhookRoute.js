@@ -180,7 +180,7 @@ async function processMediaBatch(userKey) {
   
   try {
     const sessionKey = userSession.userPhoneNumber + userSession.business_phone_number_id;
-    const currentSession = userSessions.get(sessionKey);
+    const currentSession = await userSessions.get(sessionKey);
     
     if (!currentSession) {
       console.error('❌ [BATCH] Session lost during processing');
@@ -291,7 +291,7 @@ async function processMediaBatch(userKey) {
           currentSession.nextNode = currentSession.adjList[targetNodeIndex];
         }
         
-        userSessions.set(sessionKey, currentSession);
+        await userSessions.set(sessionKey, currentSession);
         
         console.log(`🎯 [BULK] Jumped to node with id:1 (array index: ${targetNodeIndex})`);
         
@@ -323,7 +323,7 @@ async function processMediaBatch(userKey) {
         );
         
         currentSession.inputVariable = userSession.inputVariable;
-        userSessions.set(sessionKey, currentSession);
+        await userSessions.set(sessionKey, currentSession);
       }
     }
     
@@ -645,7 +645,10 @@ router.post("/webhook", async (req, res) => {
       };
 
       if (status == "failed") {
-        axios.post(`${djangoURL}/individual_message_statistics/`, { message_id: id, status, timestamp: convertedTimestamp }, { headers: { 'bpid': business_phone_number_id } });
+        // Convert to ISO 8601 with timezone for Django
+        const isoTimestamp = new Date(convertedTimestamp).toISOString();
+        axios.post(`${djangoURL}/individual_message_statistics/`, { message_id: id, status, timestamp: isoTimestamp }, { headers: { 'bpid': business_phone_number_id } })
+          .catch(err => console.error('Failed to save message statistics:', err.message));
         const error = statuses?.errors[0];
         console.log("Message failed: ", error);
         io.emit('failed-response', error);
@@ -678,7 +681,10 @@ router.post("/webhook", async (req, res) => {
         }
       }
       else if (status == "delivered") {
-        axios.post(`${djangoURL}/individual_message_statistics/`, { message_id: id, status, timestamp: convertedTimestamp }, { headers: { 'bpid': business_phone_number_id } });
+        // Convert to ISO 8601 with timezone for Django
+        const isoTimestamp = new Date(convertedTimestamp).toISOString();
+        axios.post(`${djangoURL}/individual_message_statistics/`, { message_id: id, status, timestamp: isoTimestamp }, { headers: { 'bpid': business_phone_number_id } })
+          .catch(err => console.error('Failed to save message statistics:', err.message));
         console.log("Delivered: ", userPhone);
         updateLastSeen("delivered", timestamp, userPhone, business_phone_number_id);
         await sendTemplateStatusUpdate(status);
@@ -695,7 +701,10 @@ router.post("/webhook", async (req, res) => {
         }
       }
       else if (status == "read") {
-        axios.post(`${djangoURL}/individual_message_statistics/`, { message_id: id, status, timestamp: convertedTimestamp }, { headers: { 'bpid': business_phone_number_id } });
+        // Convert to ISO 8601 with timezone for Django
+        const isoTimestamp = new Date(convertedTimestamp).toISOString();
+        axios.post(`${djangoURL}/individual_message_statistics/`, { message_id: id, status, timestamp: isoTimestamp }, { headers: { 'bpid': business_phone_number_id } })
+          .catch(err => console.error('Failed to save message statistics:', err.message));
         updateLastSeen("seen", timestamp, userPhone, business_phone_number_id);
 
         // Track analytics

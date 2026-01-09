@@ -7,8 +7,8 @@ import { chooseOptionMap } from "../utils.js";
 import { handleAudioOrdersForDrishtee, handleTextOrdersForDrishtee } from "../drishtee/drishteeservice.js";
 import { findNextNodesFromEdges, findNodeById, getNodeData } from "../helpers/edge-navigation.js";
 
-export const fastURL = process.env.FAST_API_URL || "https://fastapione-gue2c5ecc9c4b8hy.centralindia-01.azurewebsites.net"
-export const djangoURL = process.env.DJANGO_URL || "https://backeng4whatsapp-dxbmgpakhzf9bped.centralindia-01.azurewebsites.net"
+export const fastURL = process.env.FAST_API_URL || process.env.FASTAPI_URL || "https://fastapiyes-avaaadfjgzafe6ff.canadacentral-01.azurewebsites.net"
+export const djangoURL = process.env.DJANGO_URL || "https://django-faecdbgwhgepemec.canadacentral-01.azurewebsites.net"
 
 export async function sendFlowMessage(phone, bpid, header, body, footer, flowName, flowCta, access_token = null, tenant_id = null) {
     const messageData = {
@@ -94,7 +94,7 @@ export async function sendImageMessage(phoneNumber, business_phone_number_id, im
 
 export async function sendButtonMessage(buttons, message, phoneNumber, business_phone_number_id, mediaID = null, access_token = null, tenant_id = null) {
     const key = phoneNumber + business_phone_number_id
-    const userSession = userSessions.get(key);
+    const userSession = await userSessions.get(key);
     const flow = userSession.flowData
     try {
         let button_rows = buttons.map(buttonNode => ({
@@ -134,7 +134,7 @@ export async function sendInputMessage(userPhoneNumber, business_phone_number_id
 export async function sendListMessage(list, message, listTitle, phoneNumber, business_phone_number_id, access_token = null, tenant_id = null) {
     const key = phoneNumber + business_phone_number_id
     // console.log("USER SESSIONS: ",  userSessions, key)
-    const userSession = userSessions.get(key);
+    const userSession = await userSessions.get(key);
     const flow = userSession.flowData
 
     const rows = list.map((listNode, index) => ({
@@ -214,7 +214,7 @@ export async function sendProductMessage(userSession, product_list, catalog_id, 
 
 export async function sendNodeMessage(userPhoneNumber, business_phone_number_id) {
     const key = userPhoneNumber + business_phone_number_id
-    const userSession = userSessions.get(key);
+    const userSession = await userSessions.get(key);
     if (!userSession) {
         console.error(`No session found for user ${userPhoneNumber} and ${business_phone_number_id}`);
         return;
@@ -263,7 +263,7 @@ export async function sendNodeMessage(userPhoneNumber, business_phone_number_id)
         console.log("No current node - flow ended or reset needed");
     }
 
-    userSessions.set(key, userSession);
+    await userSessions.set(key, userSession);
 }
 
 // V2 Node Processing
@@ -472,6 +472,7 @@ async function processNodeLegacy(userSession, userPhoneNumber, business_phone_nu
                 console.log("string currNode: ", userSession.currNode)
 
                 if (userSession.currNode != null) {
+                    await userSessions.set(userPhoneNumber + business_phone_number_id, userSession);
                     sendNodeMessage(userPhoneNumber, business_phone_number_id)
                 }
                 break;
@@ -485,6 +486,7 @@ async function processNodeLegacy(userSession, userPhoneNumber, business_phone_nu
                 userSession.currNode = nextNode[0] !== undefined ? nextNode[0] : null;
                 console.log("image currNode: ", userSession.currNode)
                 if (userSession.currNode != null) {
+                    await userSessions.set(userPhoneNumber + business_phone_number_id, userSession);
                     sendNodeMessage(userPhoneNumber, business_phone_number_id)
                 }
                 break;
@@ -500,6 +502,7 @@ async function processNodeLegacy(userSession, userPhoneNumber, business_phone_nu
                 userSession.currNode = nextNode[0] !== undefined ? nextNode[0] : null;
                 console.log("audio currNode: ", userSession.currNode)
                 if (userSession.currNode != null) {
+                    await userSessions.set(userPhoneNumber + business_phone_number_id, userSession);
                     sendNodeMessage(userPhoneNumber, business_phone_number_id)
                 }
                 break;
@@ -513,6 +516,7 @@ async function processNodeLegacy(userSession, userPhoneNumber, business_phone_nu
                 userSession.currNode = nextNode[0] !== undefined ? nextNode[0] : null;
                 console.log("video currNode: ", userSession.currNode)
                 if (userSession.currNode != null) {
+                    await userSessions.set(userPhoneNumber + business_phone_number_id, userSession);
                     sendNodeMessage(userPhoneNumber, business_phone_number_id)
                 }
                 break;
@@ -524,6 +528,7 @@ async function processNodeLegacy(userSession, userPhoneNumber, business_phone_nu
                 userSession.currNode = nextNode[0] !== undefined ? nextNode[0] : null;
                 console.log("image currNode: ", userSession.currNode)
                 if (userSession.currNode != null) {
+                    await userSessions.set(userPhoneNumber + business_phone_number_id, userSession);
                     sendNodeMessage(userPhoneNumber, business_phone_number_id)
                 }
                 break;
@@ -580,6 +585,7 @@ async function processNodeLegacy(userSession, userPhoneNumber, business_phone_nu
                 userSession.currNode = nextNode[0] !== undefined ? nextNode[0] : null;
                 console.log("string currNode: ", userSession.currNode)
                 if (userSession.currNode != null) {
+                    await userSessions.set(userPhoneNumber + business_phone_number_id, userSession);
                     sendNodeMessage(userPhoneNumber, business_phone_number_id)
                 }
                 break;
@@ -589,6 +595,7 @@ async function processNodeLegacy(userSession, userPhoneNumber, business_phone_nu
                 await sendTemplateMessage(templateName, userSession)
                 userSession.currNode = nextNode[0] !== undefined ? nextNode[0] : null;
                 if (userSession.currNode != null) {
+                    await userSessions.set(userPhoneNumber + business_phone_number_id, userSession);
                     sendNodeMessage(userPhoneNumber, business_phone_number_id)
                 }
                 break;
@@ -606,6 +613,7 @@ async function processNodeLegacy(userSession, userPhoneNumber, business_phone_nu
                 userSession.currNode = nextNode[0] !== undefined ? nextNode[0] : null;
 
                 if (userSession.currNode != null) {
+                    await userSessions.set(userPhoneNumber + business_phone_number_id, userSession);
                     sendNodeMessage(userPhoneNumber, business_phone_number_id)
                 }
                 break;
@@ -644,6 +652,11 @@ async function processNodeLegacy(userSession, userPhoneNumber, business_phone_nu
                     // Now that message is sent, proceed with next steps
                     userSession.currNode = nextNode[0] !== undefined ? nextNode[0] : null;
 
+                    // CRITICAL: Save session BEFORE recursive sendNodeMessage call
+                    // Otherwise recursive call retrieves old session from storage
+                    await userSessions.set(userPhoneNumber + business_phone_number_id, userSession);
+                    console.log(`customint advanced from node to ${userSession.currNode}, session saved`);
+
                     // Only proceed to the next node if there is one
                     if (userSession.currNode != null) {
                         await sendNodeMessage(userPhoneNumber, business_phone_number_id);
@@ -661,12 +674,23 @@ async function processNodeLegacy(userSession, userPhoneNumber, business_phone_nu
                 const flowFooter = flow[currNode]?.footer
                 await sendFlowMessage(userPhoneNumber, business_phone_number_id, flowHeader, flowBody, flowFooter, flowName, flowCta, userSession.accessToken, userSession.tenant)
                 break;
+
+            case "button_element":
+            case "list_element":
+                // These are button/list OPTIONS, not actual nodes to display
+                // They should have already been handled by userWebhook.js
+                // If we're here, something went wrong - just log and skip
+                console.warn(`⚠️ WARNING: Reached button_element node ${currNode} in sendNodeMessage - should have been handled earlier`);
+                console.warn(`⚠️ This indicates the button advancement in userWebhook.js didn't work correctly`);
+                // Don't call sendNodeMessage recursively here - it creates loops
+                break;
+
             default:
                 console.log(`Unknown node type: ${flow[currNode]?.type}`);
         }
 
         userSession.nextNode = nextNode;
-        userSessions.set(userPhoneNumber + business_phone_number_id, userSession);
+        await userSessions.set(userPhoneNumber + business_phone_number_id, userSession);
         console.log("Updated Current Node: ", userSession.currNode);
         // await Promise.all([sendMessagePromise, sendDynamicPromise])
     } else {

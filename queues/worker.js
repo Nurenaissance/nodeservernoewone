@@ -102,7 +102,7 @@ messageQueue.process('group', numberOfWorkers, async(job) => {
 // MESSAGE SENDING FUNCTION (Always available)
 // ============================================================================
 
-async function sendMessage(messageData, contact, bpid, access_token, tenant_id) {
+export async function sendMessage(messageData, contact, bpid, access_token, tenant_id) {
   try{
     const url = `https://graph.facebook.com/v18.0/${bpid}/messages`;
     const headers = { 'Authorization': `Bearer ${access_token}`}
@@ -154,6 +154,14 @@ async function sendMessage(messageData, contact, bpid, access_token, tenant_id) 
     return messageID
   }catch(error){
     console.error("Error rcvd in sendMessage: ", JSON.stringify(error, null, 7))
+
+    // Log the specific Facebook API error if available
+    if (error.response?.data) {
+      console.error("❌ Facebook API Error Details:", JSON.stringify(error.response.data, null, 2));
+    }
+
+    // Return null to indicate failure
+    return null;
   }
 }
 

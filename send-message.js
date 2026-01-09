@@ -9,7 +9,7 @@ import { trackMessageSend } from "./analytics/tracker.js";
 export async function sendMessage(phoneNumber, business_phone_number_id, messageData, access_token = null, tenant) {
 
     const key = phoneNumber + business_phone_number_id;
-    const userSession = userSessions.get(key);
+    const userSession = await userSessions.get(key);
     if (!userSession && access_token == null) {
         console.error("User session not found and no access token provided.");
         return { success: false, error: "User session or access token missing." };

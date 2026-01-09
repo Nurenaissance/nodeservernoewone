@@ -32,12 +32,12 @@ export async function businessWebhook(req, res) {
           const welcomeMessageForConsumer = `${userName} is here to chat with you!\nType your queries or just say hello! Lets get this conversation going.`
           
           const key = recipient + business_phone_number_id
-          const customerUserSession = userSessions.get(key)
+          const customerUserSession = await userSessions.get(key)
 
           customerUserSession["talking_to"] = userPhoneNumber
           console.log("Connecting user: ", recipient, "to Agent: ", userPhoneNumber)
           nurenConsumerMap[userPhoneNumber] = recipient
-          userSessions.set(key, customerUserSession);
+          await userSessions.set(key, customerUserSession);
           sendMessage(userPhoneNumber, userSession.business_phone_number_id, {type: "text", text: {body: "You're now connected! Expect responses from the user soon. 📩"}})
           return sendMessage(recipient, userSession.business_phone_number_id, {type: "text", text: {body: welcomeMessageForConsumer}}, userSession.accessToken, userSession.tenant)
         }else{

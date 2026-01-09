@@ -106,7 +106,7 @@ router.post("/reset-session", async (req, res) => {
   try {
     for (let key of userSessions.keys()) {
       if (key.includes(bpid)) {
-        userSessions.delete(key);
+        await userSessions.delete(key);
         messageCache.del(bpid);
       }
     }

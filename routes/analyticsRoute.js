@@ -563,4 +563,68 @@ router.get('/campaign/:campaignId', async (req, res) => {
   }
 });
 
+// ==================== LOGS ENDPOINT ====================
+
+// Get message delivery logs
+router.get('/logs', async (req, res) => {
+  try {
+    const { tenantId } = req.query;
+
+    if (!tenantId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required query parameter: tenantId'
+      });
+    }
+
+    const sql = `
+      SELECT
+        template_name,
+        current_status as status,
+        recipient_phone as phone_number,
+        recipient_name as name,
+        sent_at as date,
+        failure_reason as error_code,
+        delivered_at,
+        read_at,
+        failed_at,
+        replied_at,
+        message_type,
+        cost
+      FROM message_events
+      WHERE tenant_id = $1
+      ORDER BY sent_at DESC
+      LIMIT 1000
+    `;
+
+    const result = await query(sql, [tenantId]);
+
+    // Transform data to match frontend expectations
+    const logs = result.rows.map(row => ({
+      template_name: row.template_name || 'N/A',
+      status: row.status || 'sent',
+      phone_number: row.phone_number,
+      name: row.name || 'Unknown',
+      date: row.date,
+      error_code: row.error_code,
+      delivered_at: row.delivered_at,
+      read_at: row.read_at,
+      failed_at: row.failed_at,
+      replied_at: row.replied_at,
+      message_type: row.message_type,
+      cost: parseFloat(row.cost) || 0
+    }));
+
+    res.json(logs);
+
+  } catch (error) {
+    console.error('Error fetching logs:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch logs',
+      error: error.message
+    });
+  }
+});
+
 export default router;

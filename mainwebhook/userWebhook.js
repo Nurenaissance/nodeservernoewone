@@ -423,7 +423,7 @@ if (userSession.tenant === 'hjiqohe') {
 }
 
 const sessionKey = userSession.userPhoneNumber + userSession.business_phone_number_id;
-userSessions.set(sessionKey, userSession);
+await userSessions.set(sessionKey, userSession);
   try {
     // ==================== HELLOZESTAY ULTRA-FAST PATH ====================
     
@@ -598,7 +598,7 @@ userSessions.set(sessionKey, userSession);
     if (message_text == "/human") {
       userSession.type = "one2one";
       const key = userPhoneNumber + business_phone_number_id;
-      userSessions.set(key, userSession);
+      await userSessions.set(key, userSession);
       return sendWelcomeMessage(userSession);
     }
     else if (message_text == '/person') {
@@ -609,7 +609,7 @@ userSessions.set(sessionKey, userSession);
       if (!userSession.doorbell) return;
       
       const key = String(userPhoneNumber) + String(business_phone_number_id);
-      userSessions.delete(key);
+      await userSessions.delete(key);
       userSession = await getSession(business_phone_number_id, contact);
       return sendLanguageSelectionMessage(userSession.doorbell, userSession.accessToken, userSession.userPhoneNumber, userSession.business_phone_number_id, userSession.tenant);
     }
@@ -818,7 +818,7 @@ userSessions.set(sessionKey, userSession);
 
           userSession.inputVariable = null;
           const sessionKey = userSession.userPhoneNumber + userSession.business_phone_number_id;
-          userSessions.set(sessionKey, userSession);
+          await userSessions.set(sessionKey, userSession);
           sendNodeMessage(userPhoneNumber, business_phone_number_id);
           return;
         }
@@ -871,6 +871,22 @@ userSessions.set(sessionKey, userSession);
               // REMOVED: userSession.currNode = userSession.nextNode[0];  <-- DOUBLE-ADVANCE BUG FIXED
               found = true;
               console.log(`Found in nextNode array, advanced to: ${userSession.currNode}`);
+
+              // CRITICAL FIX: Auto-advance through button_element/list_element nodes
+              const nodeType = userSession.flowData[userSession.currNode]?.type;
+              if (nodeType === 'button_element' || nodeType === 'list_element') {
+                const oldNode = userSession.currNode;
+                console.log(`🔧 BUTTON CLICK: Auto-advancing through ${nodeType} node ${oldNode}`);
+
+                if (userSession.nextNode && userSession.nextNode.length > 0) {
+                  userSession.currNode = userSession.nextNode[0];
+                  userSession.nextNode = userSession.adjList[userSession.currNode];
+                  console.log(`🔧 Auto-advanced from ${nodeType} ${oldNode} to target ${userSession.currNode}`);
+                } else {
+                  console.error(`⚠️ ${nodeType} node ${oldNode} has no nextNode!`);
+                }
+              }
+
               break;
             }
           }
@@ -897,6 +913,23 @@ userSessions.set(sessionKey, userSession);
                 console.log(`Found in global search, advanced to: ${userSession.currNode}`);
                 break;
               }
+            }
+          }
+
+          // CRITICAL FIX: Auto-advance through button_element/list_element nodes
+          // After button click, if we landed on a button_element, advance through it automatically
+          const currentNodeType = userSession.flowData[userSession.currNode]?.type;
+          if (currentNodeType === 'button_element' || currentNodeType === 'list_element') {
+            const oldNode = userSession.currNode;
+            console.log(`🔧 BUTTON CLICK: Auto-advancing through ${currentNodeType} node ${oldNode}`);
+
+            // Advance through the element to the actual target node
+            if (userSession.nextNode && userSession.nextNode.length > 0) {
+              userSession.currNode = userSession.nextNode[0];
+              userSession.nextNode = userSession.adjList[userSession.currNode];
+              console.log(`🔧 Auto-advanced from button_element ${oldNode} to actual target ${userSession.currNode}`);
+            } else {
+              console.error(`⚠️ button_element node ${oldNode} has no nextNode!`);
             }
           }
         }
@@ -940,23 +973,83 @@ userSessions.set(sessionKey, userSession);
         const flow = userSession.flowData;
         const type = flow[userSession.currNode]?.type;
 
-        if (userSession.currNode != userSession.startNode) {
-          console.log("Type: ", type);
-          if (['Text', 'string', 'audio', 'video', 'location', 'image', 'AI', 'product'].includes(type)) {
-            userSession.currNode = userSession.nextNode[0];
-          }
-          else if (['Button', 'List'].includes(type)) {
-            await executeFallback(userSession);
-            return;
-          }
+        console.log("=== LEGACY MODE DEBUG ===");
+        console.log("Current Node:", userSession.currNode);
+        console.log("Node Type:", type);
+        console.log("Next Node Array:", userSession.nextNode);
+        console.log("Adjacency List:", JSON.stringify(userSession.adjList));
+        console.log("========================");
+
+        // CRITICAL: button_element is a button OPTION, not an interactive node
+        // If user is stuck at a button_element, they must have arrived there incorrectly
+        // We should advance them automatically through it
+        if (type === 'button_element' || type === 'list_element') {
+          const oldNode = userSession.currNode;
+          console.log(`FIXING: User stuck at ${type} node ${oldNode}, auto-advancing...`);
+
+          // Auto-advance through button/list elements
+          userSession.currNode = userSession.nextNode[0];
+          userSession.nextNode = userSession.adjList[userSession.currNode];
+
+          console.log(`Auto-advanced from ${oldNode} to ${userSession.currNode}`);
+        }
+        // CRITICAL: Auto-advancing nodes (string, customint, api, template, custom)
+        // These nodes execute automatically and don't wait for user input
+        // If user sends text while at these nodes, still process them via sendNodeMessage
+        // The session save before sendNodeMessage + save inside each case prevents loops
+        else if (['string', 'customint', 'api', 'template', 'custom', 'flowjson'].includes(type)) {
+          console.log(`User at auto-advancing node "${type}" - will execute via sendNodeMessage`);
+          // Continue to sendNodeMessage - the node will process and advance automatically
+        }
+        // Text input nodes should advance after receiving text
+        else if (['Text', 'audio', 'video', 'location', 'image', 'AI', 'product'].includes(type)) {
+          // Save old node for logging
+          const oldNode = userSession.currNode;
+
+          console.log(`Before advancement: currNode=${oldNode}, nextNode=${userSession.nextNode}`);
+
+          // Advance to next node
+          userSession.currNode = userSession.nextNode[0];
+          // CRITICAL: Update nextNode using adjacency list
+          userSession.nextNode = userSession.adjList[userSession.currNode];
+
+          console.log(`After advancement: currNode=${userSession.currNode}, nextNode=${userSession.nextNode}`);
+          console.log(`Advanced from ${oldNode} to ${userSession.currNode} after text input`);
+        }
+        else if (['Button', 'List'].includes(type)) {
+          // User sent text to a button/list node - fallback
+          console.log("User sent text to Button/List node - executing fallback");
+          await executeFallback(userSession);
+          return;
+        }
+        else {
+          console.log(`WARNING: Unhandled node type "${type}" - no advancement`);
         }
       }
     }
     else if (message_type == "audio") {
-      userSession.currNode = userSession.nextNode[0];
+      // LEGACY MODE: Advance for audio messages
+      if (userSession.flowVersion !== 2) {
+        const oldNode = userSession.currNode;
+        userSession.currNode = userSession.nextNode[0];
+        userSession.nextNode = userSession.adjList[userSession.currNode];
+        console.log(`Audio message: Advanced from ${oldNode} to ${userSession.currNode}`);
+      } else {
+        // V2 mode handling if needed
+        userSession.currNode = userSession.nextNode[0];
+      }
     }
     else if (message_type == "document") {
-      userSession.currNode = userSession.nextNode[0];
+      // LEGACY MODE: Advance for document messages
+      if (userSession.flowVersion !== 2) {
+        const oldNode = userSession.currNode;
+        userSession.currNode = userSession.nextNode[0];
+        userSession.nextNode = userSession.adjList[userSession.currNode];
+        console.log(`Document message: Advanced from ${oldNode} to ${userSession.currNode}`);
+      } else {
+        // V2 mode handling if needed
+        userSession.currNode = userSession.nextNode[0];
+      }
     }
    else if (message_type == "order") {
       console.log("xyz");
@@ -1036,6 +1129,11 @@ userSessions.set(sessionKey, userSession);
       return;
     }
 
+    // CRITICAL FIX: Save session BEFORE sendNodeMessage retrieves it from storage
+    // Otherwise sendNodeMessage will get the old session state without node advancement
+    await userSessions.set(sessionKey, userSession);
+    console.log("Session saved before sending node message");
+
     sendNodeMessage(userPhoneNumber, business_phone_number_id);
     console.log("Webhook processing completed successfully");
   } finally {
@@ -1043,7 +1141,7 @@ userSessions.set(sessionKey, userSession);
   if (userSession.tenant === 'hjiqohe') {
     userSession.isProcessing = false;
   }
-  userSessions.set(sessionKey, userSession);
+  await userSessions.set(sessionKey, userSession);
 }
 }
 function assignAgent(agentList) {

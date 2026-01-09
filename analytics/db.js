@@ -14,6 +14,10 @@ const pool = new Pool({
   max: 20, // Maximum number of clients in the pool
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,
+  // SSL configuration for Azure PostgreSQL
+  ssl: process.env.DB_HOST?.includes('azure.com') || process.env.ANALYTICS_DB_HOST?.includes('azure.com')
+    ? { rejectUnauthorized: false }
+    : false,
 });
 
 // Test connection on startup

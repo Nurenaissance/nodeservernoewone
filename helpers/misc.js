@@ -33,7 +33,7 @@ export async function executeFallback(userSession) {
     }
     else {
         if (userSession.isTrigger) {
-            userSessions.delete(userPhoneNumber + business_phone_number_id);
+            await userSessions.delete(userPhoneNumber + business_phone_number_id);
             console.log("restarting user session for user: ", userPhoneNumber)
         }
         else {
@@ -101,13 +101,28 @@ export async function replacePlaceholders(message, userSession = {}, contact = n
                 let contactData = messageCache.get(contact)
                 if (!contactData) {
                     const response = await axios.get(`${djangoURL}/contacts-by-phone/${contact}`, { headers: { 'X-Tenant-Id': tenant } })
-                    contactData = response.data[0]
+                    // Fix: API returns an object, not an array
+                    contactData = Array.isArray(response.data) ? response.data[0] : response.data;
                     console.log("Received Data: ", contactData)
                     messageCache.set(contact, contactData)
                 }
                 if (keys.length > 1) {
-                    const keyPlaceholder = keys[1];
-                    const replacementValue = contactData?.[keyPlaceholder] !== undefined ? contactData[keyPlaceholder] : '';
+                    // Support nested paths like contact.customField.name or contact.name
+                    let replacementValue = contactData;
+                    const fieldPath = keys.slice(1).filter(k => k !== ''); // Remove empty strings from trailing dots
+
+                    for (const field of fieldPath) {
+                        if (replacementValue && replacementValue[field] !== undefined) {
+                            replacementValue = replacementValue[field];
+                        } else {
+                            // If path not found, try direct field access (fallback)
+                            replacementValue = contactData?.[field] || '';
+                            break;
+                        }
+                    }
+
+                    // Ensure we have a string value
+                    replacementValue = replacementValue !== null && replacementValue !== undefined ? String(replacementValue) : '';
                     message = message.replace(placeholder[0], replacementValue);
                 } else {
                     console.warn("Invalid contact placeholder: ", placeholder[0]);
@@ -303,7 +318,14 @@ export async function updateLastSeen(type, time, phone, bpid) {
     }
 }
 
-export async function getSession(business_phone_number_id, contact, skipAddContact = false) {
+export async function getSession(business_phone_number_id, contact, skipAddContact = false, retryCount = 0) {
+    const MAX_RETRIES = 3;
+
+    // Prevent infinite recursion
+    if (retryCount >= MAX_RETRIES) {
+        throw new Error(`Session initialization failed after ${MAX_RETRIES} attempts. Please check backend connectivity and service authentication.`);
+    }
+
     try {
         console.log("Contact: ", contact)
         const userPhoneNumber = contact?.wa_id
@@ -315,7 +337,7 @@ if (contact?.profile?.name && contact.profile.name.trim() !== '') {
 // Don't set a default "Nuren User" - let it be null if no name is available
 
         const key = String(userPhoneNumber) + String(business_phone_number_id);
-        let userSession = userSessions.get(key);
+        let userSession = await userSessions.get(key);
 
         if (!userSession) {
             // Only add contact if skipAddContact is false
@@ -325,29 +347,59 @@ if (contact?.profile?.name && contact.profile.name.trim() !== '') {
             console.log(`Creating new session for user ${userPhoneNumber}`);
             try {
                 let responseData = messageCache.get(business_phone_number_id)
+
+                // Validate cached data - if it's missing critical fields, refetch
+                if (responseData) {
+                    const whatsappData = responseData?.whatsapp_data?.[0];
+                    const hasValidData = whatsappData && (whatsappData.adj_list || whatsappData.nodes);
+                    if (!hasValidData) {
+                        console.log("⚠️ Cached data is invalid (missing adj_list/nodes), clearing cache...");
+                        messageCache.delete(business_phone_number_id);
+                        responseData = null;
+                    } else {
+                        console.log("✅ Using valid cached tenant data");
+                    }
+                }
+
+                // Service authentication headers
+                const serviceHeaders = {
+                    'bpid': business_phone_number_id,
+                    'X-Service-Key': process.env.NODEJS_SERVICE_KEY || process.env.NODE_SERVICE_KEY
+                };
+
                 //Get tenant from Fast
                 if (!responseData) {
                     try {
-                        const response = await axios.get(`${fastURL}/whatsapp_tenant`, { headers: { 'bpid': business_phone_number_id } });
+                        console.log(`🔍 Attempting FastAPI: ${fastURL}/whatsapp_tenant`);
+                        const response = await axios.get(`${fastURL}/whatsapp_tenant`, {
+                            headers: serviceHeaders,
+                            timeout: 10000
+                        });
                         responseData = response.data
                         messageCache.set(business_phone_number_id, responseData)
+                        console.log("✅ FastAPI tenant fetch successful");
                     } catch (error) {
-                        console.log("Fast Backend failed:", error.response?.data || error.message || error);
+                        console.log("❌ FastAPI Backend failed:", error.response?.status, error.response?.data || error.message);
                     }
                 }
                 //Get tenant from Django
                 if (!responseData) {
                     try {
-                        const response = await axios.get(`${djangoURL}/whatsapp_tenant`, { headers: { 'bpid': business_phone_number_id } });
+                        console.log(`🔍 Attempting Django: ${djangoURL}/whatsapp_tenant`);
+                        const response = await axios.get(`${djangoURL}/whatsapp_tenant`, {
+                            headers: serviceHeaders,
+                            timeout: 10000
+                        });
                         responseData = response.data
                         messageCache.set(business_phone_number_id, responseData)
+                        console.log("✅ Django tenant fetch successful");
                     } catch (error) {
-                        console.log("Django Backend failed:", error.response?.data || error.message || error);
+                        console.log("❌ Django Backend failed:", error.response?.status, error.response?.data || error.message);
                     }
                 }
                 //Get tenant failed from both
                 if (!responseData) {
-                    throw new Error("Both Backends failed!!");
+                    throw new Error(`Both Backends failed!! FastAPI: ${fastURL}, Django: ${djangoURL}. Check: 1) Services are running 2) NODEJS_SERVICE_KEY is set 3) Network connectivity`);
                 }
 
                 // DUAL MODE DETECTION
@@ -447,7 +499,7 @@ if (contact?.profile?.name && contact.profile.name.trim() !== '') {
                 };
 
                 const key = userPhoneNumber + business_phone_number_id
-                userSessions.set(key, userSession);
+                await userSessions.set(key, userSession);
             } catch (error) {
                 console.error(`Error fetching tenant data for user ${userPhoneNumber}:`, error.message);
                 throw error;
@@ -464,16 +516,18 @@ if (contact?.profile?.name && contact.profile.name.trim() !== '') {
                     // Legacy mode: use adj_list
                     // Safety check: ensure adjList exists
                     if (!userSession.adjList) {
-                        console.warn(`⚠️ [getSession] adjList undefined, reinitializing session...`);
-                        userSessions.delete(userPhoneNumber + business_phone_number_id);
-                        return await getSession(business_phone_number_id, contact);
+                        console.warn(`⚠️ [getSession] adjList undefined, clearing cache and reinitializing session...`);
+                        await userSessions.delete(userPhoneNumber + business_phone_number_id);
+                        messageCache.delete(business_phone_number_id); // Clear bad cached data
+                        return await getSession(business_phone_number_id, contact, skipAddContact, retryCount + 1);
                     }
                     userSession.nextNode = userSession.adjList[userSession.currNode];
                 }
             }
             else if (userSession.isTrigger) {
-                userSessions.delete(userPhoneNumber + business_phone_number_id);
-                return await getSession(business_phone_number_id, contact);
+                await userSessions.delete(userPhoneNumber + business_phone_number_id);
+                messageCache.delete(business_phone_number_id); // Clear cached data for fresh trigger
+                return await getSession(business_phone_number_id, contact, skipAddContact, retryCount + 1);
             }
             else {
                 userSession.currNode = userSession.flowVersion === 2 ? userSession.startNodeId : userSession.startNode;
@@ -483,9 +537,10 @@ if (contact?.profile?.name && contact.profile.name.trim() !== '') {
                 } else {
                     // Safety check: ensure adjList exists before accessing
                     if (!userSession.adjList) {
-                        console.warn(`⚠️ [getSession] adjList is undefined for session, reinitializing...`);
-                        userSessions.delete(userPhoneNumber + business_phone_number_id);
-                        return await getSession(business_phone_number_id, contact);
+                        console.warn(`⚠️ [getSession] adjList is undefined for session, clearing cache and reinitializing...`);
+                        await userSessions.delete(userPhoneNumber + business_phone_number_id);
+                        messageCache.delete(business_phone_number_id); // Clear bad cached data
+                        return await getSession(business_phone_number_id, contact, skipAddContact, retryCount + 1);
                     }
                     userSession.nextNode = userSession.adjList[userSession.currNode];
                 }
@@ -502,7 +557,14 @@ if (contact?.profile?.name && contact.profile.name.trim() !== '') {
 
 export async function triggerFlowById(userSession, id) {
     try {
-        const response = await axios.get(`${djangoURL}/flows/${id}/`);
+        const serviceHeaders = {
+            'X-Service-Key': process.env.NODEJS_SERVICE_KEY || process.env.NODE_SERVICE_KEY
+        };
+
+        const response = await axios.get(`${djangoURL}/flows/${id}/`, {
+            headers: serviceHeaders,
+            timeout: 10000
+        });
         const { flowData = {}, adjList = {}, flowName, startNode, fallback_msg, fallback_count } = response.data;
         const currNode = startNode || 0;
         const nextNode = adjList?.[currNode] || [];

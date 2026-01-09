@@ -15,8 +15,8 @@ export async function manualWebhook(req, userSession){
   if (userPhoneNumber in nurenConsumerMap){
     recipient = nurenConsumerMap[userPhoneNumber]
     if (message_text == "close"){
-      userSessions.delete(userPhoneNumber+business_phone_number_id)
-      const customer_userSession = userSessions.get(recipient+business_phone_number_id)
+      await userSessions.delete(userPhoneNumber+business_phone_number_id)
+      const customer_userSession = await userSessions.get(recipient+business_phone_number_id)
       customer_userSession.type = "chatbot"
       await sendMessage(
                 recipient, 

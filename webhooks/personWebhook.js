@@ -38,7 +38,7 @@ export async function personWebhook(req, userSession) {
     else {
       const recipient = personMap[business_phone_number_id].phoneNumber;
       const recipientKey = recipient + business_phone_number_id;
-      const recipientSession = userSessions.get(recipientKey);
+      const recipientSession = await userSessions.get(recipientKey);
       if (!recipientSession) {
         personMap[business_phone_number_id] = {
           phoneNumber: userPhoneNumber,
@@ -59,7 +59,7 @@ export async function personWebhook(req, userSession) {
   }
 
   const recipientKey = recipient + business_phone_number_id;
-  const recipientSession = userSessions.get(recipientKey);
+  const recipientSession = await userSessions.get(recipientKey);
 
   if (message_text === '/end') {
     userSession.type = "chatbot";
@@ -124,7 +124,7 @@ export async function personWebhook(req, userSession) {
 }
 
 // Run this function every minute
-function checkLongWaitingUsers() {
+async function checkLongWaitingUsers() {
   const currentTime = Date.now();
   const tenMinutes = 10 * 1000; // 10 seconds in milliseconds
 
@@ -133,7 +133,7 @@ function checkLongWaitingUsers() {
     if (currentTime - waitingUser.joinedAt > tenMinutes) {
       const userPhoneNumber = waitingUser.phoneNumber;
       const userKey = userPhoneNumber + businessId;
-      const userSession = userSessions.get(userKey);
+      const userSession = await userSessions.get(userKey);
 
       // Remove from waiting pool
       delete personMap[businessId];

@@ -2,6 +2,7 @@ import axios from 'axios';
 import { messageCache } from "./server.js";
 import { getMediaID } from "./helpers/handle-media.js";
 import { messageQueue } from "./queues/workerQueues.js";
+import { sendMessage } from "./queues/worker.js";
 import { djangoURL, fastURL } from "./mainwebhook/snm.js";
 import { replacePlaceholders } from "./helpers/misc.js"
 import { getIndianCurrentTime } from './utils.js';
@@ -210,8 +211,37 @@ export async function sendCampaign(campaignData, access_token, tenant_id, accoun
     campaignData = {
       ...campaignData, access_token, tenant_id, account_id, bpid
     }
-    console.log("Sending data in campainn worker")
-    messageQueue.add('campaign', {messageData, contact, templateInfo, campaignData}, {attempts: 3, backoff: 5000});
+    console.log("Sending data in campaign worker")
+
+    // Check if messageQueue is available (production mode)
+    if (messageQueue) {
+      messageQueue.add('campaign', {messageData, contact, templateInfo, campaignData}, {attempts: 3, backoff: 5000});
+    } else {
+      // Local development mode - send message directly
+      console.log("⚠️  Local dev mode: Sending campaign message directly without queue");
+      try {
+        const messageID = await sendMessage(messageData, contact, bpid, access_token, tenant_id);
+
+        // Only post statistics if message was sent successfully
+        if (messageID) {
+          // Store statistics
+          const data = {
+            message_id: messageID,
+            status: "sent",
+            type: "campaign",
+            type_identifier: campaignData.name,
+            template_name: templateInfo.name,
+            userPhone: contact,
+            tenant_id: campaignData.tenant_id
+          };
+          await axios.post(`${djangoURL}/individual_message_statistics/`, data, {headers: {'bpid': campaignData.bpid}});
+        } else {
+          console.error("❌ Campaign message sending failed - messageID is null/undefined");
+        }
+      } catch (err) {
+        console.error("Error sending campaign message in local dev mode:", err);
+      }
+    }
   }
   console.log("Contacts: ", contacts)
   const data = {name: campaignData.name, sent: contacts.length, type: "campaign"}
@@ -238,8 +268,8 @@ export async function sendTemplate(templateData, access_token, tenant_id, accoun
 
   const contacts = templateData.phone;
   console.log("Contacts to send template: ", contacts);
-  
-  // Array to store job IDs
+
+  // Array to store job IDs or message IDs
   const jobIds = [];
 
   for (let contact of contacts) {
@@ -251,15 +281,47 @@ export async function sendTemplate(templateData, access_token, tenant_id, accoun
       account_id,
       bpid
     };
+
     console.log("Sending data in template worker");
-    const job = await messageQueue.add('template', { messageData, contact, templateData: jobTemplateData }, { attempts: 3, backoff: 5000 });
-    jobIds.push(job.id);
+
+    // Check if messageQueue is available (production mode)
+    if (messageQueue) {
+      const job = await messageQueue.add('template', { messageData, contact, templateData: jobTemplateData }, { attempts: 3, backoff: 5000 });
+      jobIds.push(job.id);
+    } else {
+      // Local development mode - send message directly
+      console.log("⚠️  Local dev mode: Sending message directly without queue");
+      try {
+        const messageID = await sendMessage(messageData, contact, bpid, access_token, tenant_id);
+
+        // Only post statistics if message was sent successfully
+        if (messageID) {
+          jobIds.push(messageID);
+
+          // Store statistics
+          const data = {
+            message_id: messageID,
+            status: "sent",
+            type: "template",
+            type_identifier: templateName,
+            template_name: templateName,
+            userPhone: contact,
+            tenant_id: tenant_id
+          };
+          await axios.post(`${djangoURL}/individual_message_statistics/`, data, { headers: { 'bpid': bpid } });
+        } else {
+          console.error("❌ Message sending failed - messageID is null/undefined");
+        }
+      } catch (err) {
+        console.error("Error sending message in local dev mode:", err);
+      }
+    }
   }
 
   console.log("Contacts: ", contacts);
   const data = { name: templateName, sent: contacts.length, type: "template" };
   axios.post(`${djangoURL}/message-stat/`, data, { headers: { 'X-Tenant-Id': tenant_id } });
-  
+
   return jobIds;
 }
 
@@ -303,7 +365,36 @@ export async function sendTemplateToGroup(groupData, access_token, tenant_id, ac
       bpid
     };
     console.log("Sending data in worker for group");
-    messageQueue.add('group', { messageData, contact, groupData }, { attempts: 3, backoff: 5000 });
+
+    // Check if messageQueue is available (production mode)
+    if (messageQueue) {
+      messageQueue.add('group', { messageData, contact, groupData }, { attempts: 3, backoff: 5000 });
+    } else {
+      // Local development mode - send message directly
+      console.log("⚠️  Local dev mode: Sending group message directly without queue");
+      try {
+        const messageID = await sendMessage(messageData, contact, bpid, access_token, tenant_id);
+
+        // Only post statistics if message was sent successfully
+        if (messageID) {
+          // Store statistics
+          const data = {
+            message_id: messageID,
+            status: "sent",
+            type: "group",
+            type_identifier: groupName,
+            template_name: templateName,
+            userPhone: contact,
+            tenant_id: tenant_id
+          };
+          await axios.post(`${djangoURL}/individual_message_statistics/`, data, { headers: { 'bpid': bpid } });
+        } else {
+          console.error("❌ Group message sending failed - messageID is null/undefined");
+        }
+      } catch (err) {
+        console.error("Error sending group message in local dev mode:", err);
+      }
+    }
   }
 
   console.log("Contacts: ", contacts);
