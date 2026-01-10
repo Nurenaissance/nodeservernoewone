@@ -503,48 +503,62 @@ router.get('/button-performance', async (req, res) => {
     const cacheKey = CACHE_KEYS.BUTTON_PERFORMANCE || `button_performance_${tenantId}_${startDate}_${endDate}`;
 
     const data = await getCachedOrFetch(cacheKey, CACHE_TTL.OVERVIEW, async () => {
-      // Get button click statistics grouped by button text and type
-      const sql = `
-        SELECT
-          bc.button_text,
-          bc.button_type,
-          bc.button_index,
-          COUNT(*) as total_clicks,
-          COUNT(DISTINCT bc.message_id) as unique_messages,
-          COUNT(DISTINCT bc.recipient_phone) as unique_recipients
-        FROM button_clicks bc
-        JOIN message_events me ON bc.message_id = me.message_id
-        WHERE me.tenant_id = $1
-          AND bc.clicked_at >= $2
-          AND bc.clicked_at <= $3
-        GROUP BY bc.button_text, bc.button_type, bc.button_index
-        ORDER BY total_clicks DESC
-      `;
+      try {
+        // Get button click statistics grouped by button text and type
+        const sql = `
+          SELECT
+            bc.button_text,
+            bc.button_type,
+            bc.button_index,
+            COUNT(*) as total_clicks,
+            COUNT(DISTINCT bc.message_id) as unique_messages,
+            COUNT(DISTINCT bc.recipient_phone) as unique_recipients
+          FROM button_clicks bc
+          JOIN message_events me ON bc.message_id = me.message_id
+          WHERE me.tenant_id = $1
+            AND bc.clicked_at >= $2
+            AND bc.clicked_at <= $3
+          GROUP BY bc.button_text, bc.button_type, bc.button_index
+          ORDER BY total_clicks DESC
+        `;
 
-      const result = await query(sql, [tenantId, startDate, endDate]);
+        const result = await query(sql, [tenantId, startDate, endDate]);
 
-      // Transform data for frontend
-      const byButton = result.rows.map(row => ({
-        buttonText: row.button_text || `Button ${row.button_index}`,
-        buttonType: row.button_type,
-        buttonIndex: parseInt(row.button_index) || 0,
-        totalClicks: parseInt(row.total_clicks) || 0,
-        uniqueMessages: parseInt(row.unique_messages) || 0,
-        uniqueRecipients: parseInt(row.unique_recipients) || 0
-      }));
+        // Transform data for frontend
+        const byButton = result.rows.map(row => ({
+          buttonText: row.button_text || `Button ${row.button_index}`,
+          buttonType: row.button_type,
+          buttonIndex: parseInt(row.button_index) || 0,
+          totalClicks: parseInt(row.total_clicks) || 0,
+          uniqueMessages: parseInt(row.unique_messages) || 0,
+          uniqueRecipients: parseInt(row.unique_recipients) || 0
+        }));
 
-      // Get overall stats
-      const totalClicks = byButton.reduce((sum, btn) => sum + btn.totalClicks, 0);
+        // Get overall stats
+        const totalClicks = byButton.reduce((sum, btn) => sum + btn.totalClicks, 0);
 
-      return {
-        totalClicks,
-        byButton,
-        summary: {
-          totalButtons: byButton.length,
-          mostClickedButton: byButton[0]?.buttonText || null,
-          mostClickedButtonClicks: byButton[0]?.totalClicks || 0
-        }
-      };
+        return {
+          totalClicks,
+          byButton,
+          summary: {
+            totalButtons: byButton.length,
+            mostClickedButton: byButton[0]?.buttonText || null,
+            mostClickedButtonClicks: byButton[0]?.totalClicks || 0
+          }
+        };
+      } catch (queryError) {
+        // If table doesn't exist or query fails, return empty data instead of crashing
+        console.warn('Button performance query failed (table may not exist):', queryError.message);
+        return {
+          totalClicks: 0,
+          byButton: [],
+          summary: {
+            totalButtons: 0,
+            mostClickedButton: null,
+            mostClickedButtonClicks: 0
+          }
+        };
+      }
     });
 
     res.json({
