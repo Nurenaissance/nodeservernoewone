@@ -45,13 +45,29 @@ export async function sendMessage(phoneNumber, business_phone_number_id, message
 
             // Track analytics for this message
             try {
+                // Fetch contact name from Django (async, don't block)
+                let recipientName = null;
+                try {
+                    const contactResponse = await axios.get(
+                        `${process.env.DJANGO_API}/contacts/phone/${phoneNumber}/`,
+                        {
+                            headers: { 'X-Tenant-Id': tenant },
+                            timeout: 2000 // 2 second timeout
+                        }
+                    );
+                    recipientName = contactResponse.data?.name || null;
+                } catch (contactError) {
+                    // Contact not found or error - not critical, continue
+                    console.log('ℹ️ Could not fetch contact name for analytics');
+                }
+
                 await trackMessageSend({
                     tenantId: tenant,
                     messageId: messageId,
                     templateId: messageData?.template?.name || null,
                     templateName: messageData?.template?.name || null,
                     recipientPhone: phoneNumber,
-                    recipientName: null,
+                    recipientName: recipientName,
                     contactId: null,
                     campaignId: null,
                     broadcastGroupId: null,

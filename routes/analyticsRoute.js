@@ -488,6 +488,80 @@ router.get('/top-templates', async (req, res) => {
   }
 });
 
+// Get button performance analytics
+router.get('/button-performance', async (req, res) => {
+  try {
+    const { tenantId, startDate, endDate } = req.query;
+
+    if (!tenantId || !startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required query parameters: tenantId, startDate, endDate'
+      });
+    }
+
+    const cacheKey = CACHE_KEYS.BUTTON_PERFORMANCE || `button_performance_${tenantId}_${startDate}_${endDate}`;
+
+    const data = await getCachedOrFetch(cacheKey, CACHE_TTL.OVERVIEW, async () => {
+      // Get button click statistics grouped by button text and type
+      const sql = `
+        SELECT
+          bc.button_text,
+          bc.button_type,
+          bc.button_index,
+          COUNT(*) as total_clicks,
+          COUNT(DISTINCT bc.message_id) as unique_messages,
+          COUNT(DISTINCT bc.recipient_phone) as unique_recipients
+        FROM button_clicks bc
+        JOIN message_events me ON bc.message_id = me.message_id
+        WHERE me.tenant_id = $1
+          AND bc.clicked_at >= $2
+          AND bc.clicked_at <= $3
+        GROUP BY bc.button_text, bc.button_type, bc.button_index
+        ORDER BY total_clicks DESC
+      `;
+
+      const result = await query(sql, [tenantId, startDate, endDate]);
+
+      // Transform data for frontend
+      const byButton = result.rows.map(row => ({
+        buttonText: row.button_text || `Button ${row.button_index}`,
+        buttonType: row.button_type,
+        buttonIndex: parseInt(row.button_index) || 0,
+        totalClicks: parseInt(row.total_clicks) || 0,
+        uniqueMessages: parseInt(row.unique_messages) || 0,
+        uniqueRecipients: parseInt(row.unique_recipients) || 0
+      }));
+
+      // Get overall stats
+      const totalClicks = byButton.reduce((sum, btn) => sum + btn.totalClicks, 0);
+
+      return {
+        totalClicks,
+        byButton,
+        summary: {
+          totalButtons: byButton.length,
+          mostClickedButton: byButton[0]?.buttonText || null,
+          mostClickedButtonClicks: byButton[0]?.totalClicks || 0
+        }
+      };
+    });
+
+    res.json({
+      success: true,
+      data
+    });
+
+  } catch (error) {
+    console.error('Error fetching button performance:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch button performance',
+      error: error.message
+    });
+  }
+});
+
 // Get campaign analytics
 router.get('/campaign/:campaignId', async (req, res) => {
   try {
@@ -579,21 +653,22 @@ router.get('/logs', async (req, res) => {
 
     const sql = `
       SELECT
-        template_name,
-        current_status as status,
-        recipient_phone as phone_number,
-        recipient_name as name,
-        sent_at as date,
-        failure_reason as error_code,
-        delivered_at,
-        read_at,
-        failed_at,
-        replied_at,
-        message_type,
-        cost
-      FROM message_events
-      WHERE tenant_id = $1
-      ORDER BY sent_at DESC
+        me.template_name,
+        me.current_status as status,
+        me.recipient_phone as phone_number,
+        COALESCE(cc.name, me.recipient_name, 'Unknown') as name,
+        me.sent_at as date,
+        me.failure_reason as error_code,
+        me.delivered_at,
+        me.read_at,
+        me.failed_at,
+        me.replied_at,
+        me.message_type,
+        me.cost
+      FROM message_events me
+      LEFT JOIN contacts_contact cc ON cc.phone = me.recipient_phone AND cc.tenant_id = me.tenant_id
+      WHERE me.tenant_id = $1
+      ORDER BY me.sent_at DESC
       LIMIT 1000
     `;
 
@@ -601,10 +676,10 @@ router.get('/logs', async (req, res) => {
 
     // Transform data to match frontend expectations
     const logs = result.rows.map(row => ({
-      template_name: row.template_name || 'N/A',
+      template_name: row.template_name || 'No Template',
       status: row.status || 'sent',
       phone_number: row.phone_number,
-      name: row.name || 'Unknown',
+      name: row.name, // Already handled by COALESCE in SQL
       date: row.date,
       error_code: row.error_code,
       delivered_at: row.delivered_at,
