@@ -11,9 +11,11 @@ const pool = new Pool({
   database: process.env.ANALYTICS_DB_NAME || process.env.DB_NAME || 'analytics',
   user: process.env.ANALYTICS_DB_USER || process.env.DB_USER,
   password: process.env.ANALYTICS_DB_PASSWORD || process.env.DB_PASSWORD,
-  max: 20, // Maximum number of clients in the pool
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
+  max: 5, // Reduced from 20 to prevent Azure connection exhaustion
+  min: 0, // No minimum idle connections
+  idleTimeoutMillis: 10000, // Close idle connections faster (10s instead of 30s)
+  connectionTimeoutMillis: 5000, // Increased from 2s to 5s
+  allowExitOnIdle: true, // Allow pool to close when all connections are idle
   // SSL configuration for Azure PostgreSQL
   ssl: process.env.DB_HOST?.includes('azure.com') || process.env.ANALYTICS_DB_HOST?.includes('azure.com')
     ? { rejectUnauthorized: false }
@@ -27,8 +29,21 @@ pool.on('connect', () => {
 
 pool.on('error', (err) => {
   console.error('❌ Unexpected error on idle client', err);
-  process.exit(-1);
+  // Don't exit on connection errors - let pool handle reconnection
 });
+
+pool.on('remove', () => {
+  console.log('🔌 Connection removed from pool');
+});
+
+// Log pool stats periodically to monitor connection usage
+setInterval(() => {
+  console.log('📊 Pool Stats:', {
+    total: pool.totalCount,
+    idle: pool.idleCount,
+    waiting: pool.waitingCount
+  });
+}, 60000); // Every 60 seconds
 
 // Query helper
 export async function query(text, params) {
