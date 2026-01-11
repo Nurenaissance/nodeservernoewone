@@ -9,6 +9,7 @@ import triggerRoutes from './triggerRoute.js';
 import sessionRoutes from './sessionRoute.js';
 import analyticsRoutes from './analyticsRoute.js';
 import aiAgentRoutes from './aiAgentRoute.js';
+import tenantControlRoutes from './tenantControlRoute.js';
 
 export default function setupRoutes(app) {
   app.use(healthRoutes);
@@ -22,7 +23,8 @@ export default function setupRoutes(app) {
   app.use(sessionRoutes);
   app.use('/api/analytics', analyticsRoutes);
   app.use('/api', aiAgentRoutes);
-  
+  app.use('/api/tenant-control', tenantControlRoutes);
+
   // Default route
   app.get("/", (req, res) => {
     res.send(`<pre>Nothing to see here.

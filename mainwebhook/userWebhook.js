@@ -523,31 +523,107 @@ await userSessions.set(sessionKey, userSession);
       }];
     }
     else if (message_type == "image") {
+      const mediaID = message?.image?.id;
       const caption = message?.image?.caption || "";
-      formattedConversation = [{
-        text: caption ? `[Image: ${caption}]` : "[Image]",
-        sender: "user"
-      }];
+
+      try {
+        console.log(`📷 Processing image upload: ${mediaID}`);
+        const blobUrl = await getImageAndUploadToBlob(mediaID, userSession.accessToken);
+
+        formattedConversation = [{
+          message_type: "image",
+          media_url: blobUrl,
+          media_caption: caption,
+          text: caption || "",
+          sender: "user"
+        }];
+
+        console.log(`✅ Image uploaded to Blob: ${blobUrl}`);
+      } catch (error) {
+        console.error("❌ Error uploading image to blob:", error.message);
+        // Fallback to placeholder if upload fails
+        formattedConversation = [{
+          message_type: "image",
+          text: caption ? `[Image: ${caption}]` : "[Image]",
+          sender: "user"
+        }];
+      }
     }
     else if (message_type == "video") {
+      const mediaID = message?.video?.id;
       const caption = message?.video?.caption || "";
-      formattedConversation = [{
-        text: caption ? `[Video: ${caption}]` : "[Video]",
-        sender: "user"
-      }];
+
+      try {
+        console.log(`🎥 Processing video upload: ${mediaID}`);
+        const blobUrl = await getImageAndUploadToBlob(mediaID, userSession.accessToken);
+
+        formattedConversation = [{
+          message_type: "video",
+          media_url: blobUrl,
+          media_caption: caption,
+          text: caption || "",
+          sender: "user"
+        }];
+
+        console.log(`✅ Video uploaded to Blob: ${blobUrl}`);
+      } catch (error) {
+        console.error("❌ Error uploading video to blob:", error.message);
+        formattedConversation = [{
+          message_type: "video",
+          text: caption ? `[Video: ${caption}]` : "[Video]",
+          sender: "user"
+        }];
+      }
     }
     else if (message_type == "document") {
+      const mediaID = message?.document?.id;
       const filename = message?.document?.filename || "document";
-      formattedConversation = [{
-        text: `[Document: ${filename}]`,
-        sender: "user"
-      }];
+
+      try {
+        console.log(`📄 Processing document upload: ${mediaID}`);
+        const blobUrl = await getImageAndUploadToBlob(mediaID, userSession.accessToken);
+
+        formattedConversation = [{
+          message_type: "document",
+          media_url: blobUrl,
+          media_filename: filename,
+          text: filename,
+          sender: "user"
+        }];
+
+        console.log(`✅ Document uploaded to Blob: ${blobUrl}`);
+      } catch (error) {
+        console.error("❌ Error uploading document to blob:", error.message);
+        formattedConversation = [{
+          message_type: "document",
+          text: `[Document: ${filename}]`,
+          sender: "user"
+        }];
+      }
     }
     else if (message_type == "audio") {
-      formattedConversation = [{
-        text: "[Voice message]",
-        sender: "user"
-      }];
+      const mediaID = message?.audio?.id;
+
+      try {
+        console.log(`🎵 Processing audio upload: ${mediaID}`);
+        const blobUrl = await getImageAndUploadToBlob(mediaID, userSession.accessToken);
+
+        formattedConversation = [{
+          message_type: "audio",
+          media_url: blobUrl,
+          text: "",
+          sender: "user"
+        }];
+
+        console.log(`✅ Audio uploaded to Blob: ${blobUrl}`);
+      } catch (error) {
+        console.error("❌ Error uploading audio to blob:", error.message);
+        formattedConversation = [{
+          message_type: "audio",
+          text: "[Voice message]",
+          sender: "user"
+        }];
+      }
     }
     else if (message_type == "location") {
       formattedConversation = [{
@@ -791,8 +867,13 @@ await userSessions.set(sessionKey, userSession);
         } catch (error) {
           console.error('Error appending data to sheet:', error);
         }
-        userSession.currNode = userSession.nextNode[0];
-        userSession.nextNode = userSession.adjList[userSession.currNode];
+
+        // FlowJSON node already advanced currNode when it sent the flow
+        // So we just need to process the current node (which is already the next node after flowjson)
+        console.log(`📨 NFM reply received for flow: ${flowName}`);
+        console.log(`📍 Current node after flow: ${userSession.currNode}`);
+
+        // Process the current node (no need to advance again)
         sendNodeMessage(userPhoneNumber, business_phone_number_id);
         return;
       }

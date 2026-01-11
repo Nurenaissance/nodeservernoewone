@@ -673,6 +673,14 @@ async function processNodeLegacy(userSession, userPhoneNumber, business_phone_nu
                 const flowBody = flow[currNode]?.body
                 const flowFooter = flow[currNode]?.footer
                 await sendFlowMessage(userPhoneNumber, business_phone_number_id, flowHeader, flowBody, flowFooter, flowName, flowCta, userSession.accessToken, userSession.tenant)
+
+                // Auto-advance to next node after sending flow (prevents repeat when user replies)
+                // But DON'T call sendNodeMessage recursively - wait for user's nfm_reply
+                console.log(`📋 FlowJSON sent: ${flowName}, waiting for user response`);
+                userSession.currNode = nextNode[0] !== undefined ? nextNode[0] : null;
+                userSession.nextNode = nextNode;
+                await userSessions.set(userPhoneNumber + business_phone_number_id, userSession);
+                console.log(`✅ FlowJSON advanced to next node: ${userSession.currNode} (will process after nfm_reply)`);
                 break;
 
             case "button_element":

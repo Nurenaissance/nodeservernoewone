@@ -101,20 +101,43 @@ router.post("/login-flow/:tenant_id", async (req, res) => {
   }
 });
 
+/**
+ * DEPRECATED: Use /api/tenant-control/reset-session instead
+ * This endpoint is maintained for backward compatibility
+ */
 router.post("/reset-session", async (req, res) => {
   const bpid = req.body.business_phone_number_id;
   try {
-    for (let key of userSessions.keys()) {
-      if (key.includes(bpid)) {
-        await userSessions.delete(key);
-        messageCache.del(bpid);
-      }
+    // Validate bpid parameter
+    if (!bpid) {
+      return res.status(400).json({ "Error": "business_phone_number_id is required" });
     }
-    console.log("User Sessions after delete: ", userSessions, messageCache);
-    res.status(200).json({ "Success": `Session Deleted Successfully for ${bpid}` });
+
+    console.log(`⚠️  Using deprecated /reset-session endpoint. Use /api/tenant-control/reset-session instead`);
+
+    // Import tenant automation control
+    const tenantAutomationControl = (await import('../tenantAutomationControl.js')).default;
+
+    // Delete all sessions for this BPID
+    const deletedCount = await tenantAutomationControl.deleteAllSessionsForBpid(bpid);
+
+    // Clear message cache for this bpid
+    const cacheCleared = messageCache.del(bpid);
+
+    console.log(`Reset session: Deleted ${deletedCount} session(s) and cleared cache for ${bpid}`);
+
+    res.status(200).json({
+      "Success": `Session Deleted Successfully for ${bpid}`,
+      "deletedSessions": deletedCount,
+      "cacheCleared": cacheCleared,
+      "warning": "This endpoint is deprecated. Please use /api/tenant-control/reset-session instead"
+    });
   } catch (error) {
-    console.log(`Error Occurred while resetting session for ${bpid}: `, error);
-    res.status(500).json({ "Error": `Error Occurred while resetting session for ${bpid}` });
+    console.error(`Error Occurred while resetting session for ${bpid}:`, error);
+    res.status(500).json({
+      "Error": `Error Occurred while resetting session for ${bpid}`,
+      "message": error.message
+    });
   }
 });
 
